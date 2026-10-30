@@ -9,7 +9,7 @@ jobs:
     # Runs on any newly opened issue, or if manually labeled 'agent'
     if: github.event_name == 'issues'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
       pull-requests: write
@@ -31,6 +31,8 @@ jobs:
 
       - name: Execute Manager & Developer Agents
         env:
+          PYTHONUNBUFFERED: "1"
+          GIT_TERMINAL_PROMPT: "0"
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-3.8-flash
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

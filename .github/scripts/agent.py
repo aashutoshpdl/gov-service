@@ -1,23 +1,38 @@
 import os
+import sys
 import json
 import subprocess
 from google import genai
 from google.genai import types
 
-# Initialize Gemini Client
+# Force unbuffered output so logs appear in real-time on GitHub Actions
+sys.stdout.reconfigure(line_buffering=True)
+
 api_key = os.environ.get("GEMINI_API_KEY")
 if not api_key:
     raise ValueError("GEMINI_API_KEY environment variable is missing.")
 
-client = genai.Client(api_key=api_key)
-
+gh_token = os.environ.get("GH_TOKEN", "")
+repo = os.environ.get("REPO", "")
 issue_num = os.environ.get("ISSUE_NUMBER", "1")
 issue_title = os.environ.get("ISSUE_TITLE", "New Feature Request")
 issue_body = os.environ.get("ISSUE_BODY", "")
-repo = os.environ.get("REPO", "")
 model_name = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 
-print(f"Processing Issue #{issue_num}: {issue_title} using model {model_name}")
+# Configure Git authenticated remote so git push never hangs for credentials
+if gh_token and repo:
+    subprocess.run(
+        ["git", "remote", "set-url", "origin", f"https://x-access-token:{gh_token}@github.com/{repo}.git"],
+        check=False
+    )
+
+# Configure Gemini client with an explicit 3-minute timeout so it never hangs silently
+client = genai.Client(
+    api_key=api_key,
+    http_options=types.HttpOptions(timeout=180.0)
+)
+
+print(f"🚀 Processing Issue #{issue_num}: {issue_title} using model {model_name}")
 
 # ---------------------------------------------------------------------------
 # PHASE 1: MANAGER AGENT
@@ -27,21 +42,19 @@ print("🧠 Manager Agent: Determining optimal architecture and tech stack...")
 
 manager_system_instruction = """
 You are an elite Chief Technology Officer & Technical Product Manager.
-Analyze the user's issue request. The user may give vague or multi-faceted requirements.
-Your job is to:
-1. Choose the optimal programming language and framework for the task:
-   - Web application: Next.js, React/Vite, or clean static HTML/CSS/JS (deployable to GitHub Pages).
-   - Mobile app: Android/Flutter (capable of generating an APK in build).
-   - Systems / High performance / CLI: Rust, Go, or C++.
-   - Machine Learning / Data / Automation: Python.
-   - Cross-platform desktop: Electron, Tauri, or platform native.
-2. Formulate a complete project structure, identifying all source files, configs (e.g., Cargo.toml, package.json, requirements.txt, pubspec.yaml), and a standardized `build.sh` script if compilation or packaging is needed.
-3. If an executable/APK/bundle is created, ensure `build.sh` places final artifacts into a `./dist` folder.
+Analyze the user's issue request.
+1. Choose the optimal programming language and framework:
+   - Web application: Clean, high-performance static web app or React SPA using CDN or direct bundle (directly deployable to GitHub Pages without heavy multi-minute builds).
+   - Mobile: Flutter / Android APK.
+   - Systems / CLI: Rust or Go.
+   - Data / Automation: Python.
+2. Outline the essential files needed for a complete, functional solution.
+3. Keep the file footprint modular and focused (2-5 key files) so code generation is rapid and reliable.
 
 Output strictly valid JSON with this schema:
 {
   "project_type": "<web | mobile | cli | data | desktop>",
-  "stack_chosen": "<e.g., Rust CLI / React Web / Flutter Mobile / Python>",
+  "stack_chosen": "<e.g., React SPA (CDN) / HTML5 / Rust / Python>",
   "summary": "<2-3 sentence executive summary of the plan>",
   "plan_steps": ["step 1", "step 2", "step 3"]
 }
@@ -67,10 +80,10 @@ comment_body = (
     f"**Selected Stack:** `{plan.get('stack_chosen', 'Auto-selected')}` ({plan.get('project_type', 'General')})\n\n"
     f"**Architecture Summary:**\n{plan.get('summary', '')}\n\n"
     f"**Roadmap:**\n{plan_bullets}\n\n"
-    f"🔨 *Developer Agent has begun generating full code and build scripts...*"
+    f"🔨 *Developer Agent is now generating complete, functional code...*"
 )
 
-subprocess.run(["gh", "issue", "comment", str(issue_num), "--body", comment_body], check=False)
+subprocess.run(["gh", "issue", "comment", str(issue_num), "--repo", repo, "--body", comment_body], check=False)
 
 # ---------------------------------------------------------------------------
 # PHASE 2: DEVELOPER AGENT
@@ -79,23 +92,22 @@ subprocess.run(["gh", "issue", "comment", str(issue_num), "--body", comment_body
 print("💻 Developer Agent: Writing source code and build pipelines...")
 
 branch_name = f"feature/issue-{issue_num}"
-subprocess.run(["git", "checkout", "-b", branch_name], check=False)
+subprocess.run(["git", "checkout", "-B", branch_name], check=False)
 
 dev_system_instruction = """
-You are a Staff Software Engineer capable of writing production-grade code in any programming language (Rust, Python, Go, TypeScript, Java/Kotlin, Flutter, C++, Web, etc.).
+You are a Staff Software Engineer. Write clean, complete, working production code.
 
-Generate ALL necessary files for the proposed project:
-1. All application source code.
-2. Standard package manager and configuration files (e.g., Cargo.toml, package.json, requirements.txt, Dockerfile, etc.).
-3. A `build.sh` executable shell script that installs needed dependencies, compiles/tests the project, and places distributable outputs (binaries, APKs, or static web bundles) into a `./dist` directory.
-4. An updated README.md documenting usage and installation.
-
-Output MUST be strictly valid JSON mapping relative file paths to their complete string contents:
+Guidelines:
+1. Provide the complete code for the application. Do not leave placeholders, TODOs, or truncated snippets.
+2. If this is a Web application, make it self-contained with index.html, styles.css, app.js (or inline scripts) so it is instantly viewable on GitHub Pages. Follow any design system CDN requirements specified in the prompt.
+3. Always include a `build.sh` script (e.g. copying web files to ./dist or compiling binaries).
+4. Output MUST be strictly valid JSON mapping relative file paths to their full string contents:
 {
-  "src/main.rs": "...",
-  "Cargo.toml": "...",
-  "build.sh": "#!/usr/bin/env bash\\n...",
-  "README.md": "..."
+  "index.html": "<!DOCTYPE html>...",
+  "styles.css": "...",
+  "app.js": "...",
+  "build.sh": "#!/usr/bin/env bash\\nmkdir -p dist && cp index.html styles.css app.js dist/\\n",
+  "README.md": "# Project documentation..."
 }
 """
 
@@ -107,6 +119,7 @@ Stack: {plan.get('stack_chosen')}
 Plan: {plan.get('summary')}
 """
 
+print("⏳ Calling Gemini Developer Agent (generating complete source files)...")
 dev_res = client.models.generate_content(
     model=model_name,
     contents=dev_prompt,
@@ -116,19 +129,20 @@ dev_res = client.models.generate_content(
     )
 )
 
+print("📦 Decoding and writing generated files...")
 code_files = json.loads(dev_res.text)
 
-# Write out all files
 for file_path, content in code_files.items():
-    # Sanitize and ensure parent directory exists
     clean_path = os.path.normpath(file_path.lstrip("/"))
-    os.makedirs(os.path.dirname(clean_path), exist_ok=True) if os.path.dirname(clean_path) else None
+    if os.path.dirname(clean_path):
+        os.makedirs(os.path.dirname(clean_path), exist_ok=True)
     
     with open(clean_path, "w", encoding="utf-8") as f:
         f.write(content)
     
     if clean_path.endswith(".sh"):
         os.chmod(clean_path, 0o755)
+    print(f"  ✓ Created: {clean_path}")
 
 # ---------------------------------------------------------------------------
 # PHASE 3: COMMIT & OPEN PULL REQUEST
@@ -141,7 +155,9 @@ subprocess.run(["git", "add", "."], check=False)
 
 commit_msg = f"feat: {issue_title} (closes #{issue_num})\n\nStack: {plan.get('stack_chosen')}"
 subprocess.run(["git", "commit", "-m", commit_msg], check=False)
-subprocess.run(["git", "push", "origin", branch_name], check=False)
+
+print(f"⬆️ Pushing branch {branch_name} to origin...")
+push_res = subprocess.run(["git", "push", "-u", "origin", branch_name, "--force"], check=False)
 
 pr_body = f"""
 ## 🤖 Automated Solution for #{issue_num}
@@ -154,7 +170,7 @@ pr_body = f"""
 {plan.get('summary')}
 
 ### 📦 Key Files Added:
-{', '.join([f'`{k}`' for k in list(code_files.keys())[:10]])}
+{', '.join([f'`{k}`' for k in list(code_files.keys())])}
 
 ---
 *Once merged into `main`, GitHub Actions will automatically trigger the universal build pipeline to publish live web previews (GitHub Pages) or downloadable release binaries/APKs.*
@@ -162,12 +178,21 @@ pr_body = f"""
 Closes #{issue_num}
 """
 
-subprocess.run([
+print("📬 Creating GitHub Pull Request...")
+pr_create_res = subprocess.run([
     "gh", "pr", "create",
+    "--repo", repo,
     "--title", f"Feature: {issue_title}",
     "--body", pr_body,
     "--head", branch_name,
     "--base", "main"
-], check=False)
+], capture_output=True, text=True, check=False)
 
-print("✅ Pull Request successfully created!")
+pr_url = pr_create_res.stdout.strip()
+print(f"PR output: {pr_url}")
+
+# Post completion notification directly on the issue
+completion_comment = f"✅ **Developer Agent has completed the implementation!**\n\nPull Request is ready for your review: {pr_url}\n\nMerge it into `main` to trigger the live preview."
+subprocess.run(["gh", "issue", "comment", str(issue_num), "--repo", repo, "--body", completion_comment], check=False)
+
+print("🎉 Everything finished successfully!")
