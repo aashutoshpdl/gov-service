@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import subprocess
+import glob
 from google import genai
 from google.genai import types
 
@@ -26,10 +27,40 @@ if gh_token and repo:
         check=False
     )
 
-# Configure Gemini client
 client = genai.Client(api_key=api_key)
 
 print(f"🚀 Processing Issue #{issue_num}: {issue_title} using model {model_name}")
+
+# ---------------------------------------------------------------------------
+# PHASE 0: SCAN EXISTING REPOSITORY CONTEXT
+# Reads existing source files so the agent builds ON TOP of existing code.
+# ---------------------------------------------------------------------------
+print("🔍 Scanning existing codebase...")
+existing_files = {}
+ignored_dirs = {".git", ".github", "node_modules", "dist", "build", ".venv"}
+allowed_extensions = {".html", ".css", ".js", ".jsx", ".ts", ".tsx", ".json", ".rs", ".py", ".go", ".sh", ".md"}
+
+for root, dirs, files in os.walk("."):
+    dirs[:] = [d for d in dirs if d not in ignored_dirs]
+    for file in files:
+        ext = os.path.splitext(file)[1]
+        if ext in allowed_extensions:
+            path = os.path.normpath(os.path.join(root, file))
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                    # Only include files under 100KB to stay fast
+                    if len(content) < 100000:
+                        existing_files[path] = content
+            except Exception:
+                pass
+
+print(f"📁 Found {len(existing_files)} existing project files in repository.")
+existing_code_summary = ""
+if existing_files:
+    existing_code_summary = "### EXISTING CODEBASE FILES IN REPOSITORY:\n"
+    for path, content in existing_files.items():
+        existing_code_summary += f"\n--- FILE: {path} ---\n{content}\n"
 
 # ---------------------------------------------------------------------------
 # PHASE 1: MANAGER AGENT
@@ -39,25 +70,27 @@ print("🧠 Manager Agent: Determining optimal architecture and tech stack...")
 
 manager_system_instruction = """
 You are an elite Chief Technology Officer & Technical Product Manager.
-Analyze the user's issue request.
-1. Choose the optimal programming language and framework:
-   - Web application: Clean, high-performance static web app or React SPA using CDN or direct bundle (directly deployable to GitHub Pages without heavy multi-minute builds).
-   - Mobile: Flutter / Android APK.
-   - Systems / CLI: Rust or Go.
-   - Data / Automation: Python.
-2. Outline the essential files needed for a complete, functional solution.
-3. Keep the file footprint modular and focused (2-5 key files) so code generation is rapid and reliable.
+Analyze the user's issue request in the context of any existing codebase:
+1. If the repository already has code, plan how to EXTEND, REFACTOR, or ADD FEATURES to the existing code.
+2. If this is a new project, select the optimal language and framework.
+3. Outline the essential files to create or modify.
 
 Output strictly valid JSON with this schema:
 {
   "project_type": "<web | mobile | cli | data | desktop>",
-  "stack_chosen": "<e.g., React SPA (CDN) / HTML5 / Rust / Python>",
+  "stack_chosen": "<e.g., React / Tailwind / Rust / Python>",
   "summary": "<2-3 sentence executive summary of the plan>",
   "plan_steps": ["step 1", "step 2", "step 3"]
 }
 """
 
-manager_prompt = f"Issue Title: {issue_title}\nIssue Description:\n{issue_body}"
+manager_prompt = f"""
+Issue Title: {issue_title}
+Issue Description:
+{issue_body}
+
+{existing_code_summary}
+"""
 
 manager_res = client.models.generate_content(
     model=model_name,
@@ -77,14 +110,14 @@ comment_body = (
     f"**Selected Stack:** `{plan.get('stack_chosen', 'Auto-selected')}` ({plan.get('project_type', 'General')})\n\n"
     f"**Architecture Summary:**\n{plan.get('summary', '')}\n\n"
     f"**Roadmap:**\n{plan_bullets}\n\n"
-    f"🔨 *Developer Agent is now generating complete, functional code...*"
+    f"🔨 *Developer Agent is now building/updating code...*"
 )
 
 subprocess.run(["gh", "issue", "comment", str(issue_num), "--repo", repo, "--body", comment_body], check=False)
 
 # ---------------------------------------------------------------------------
 # PHASE 2: DEVELOPER AGENT
-# Generates complete, functional, multi-file code for the chosen stack.
+# Generates or updates code, building directly on top of existing files.
 # ---------------------------------------------------------------------------
 print("💻 Developer Agent: Writing source code and build pipelines...")
 
@@ -92,31 +125,31 @@ branch_name = f"feature/issue-{issue_num}"
 subprocess.run(["git", "checkout", "-B", branch_name], check=False)
 
 dev_system_instruction = """
-You are a Staff Software Engineer. Write clean, complete, working production code.
+You are a Staff Software Engineer.
+Your task is to implement the requested feature or fix.
 
-Guidelines:
-1. Provide the complete code for the application. Do not leave placeholders, TODOs, or truncated snippets.
-2. If this is a Web application, make it self-contained with index.html, styles.css, app.js (or inline scripts) so it is instantly viewable on GitHub Pages. Follow any design system CDN requirements specified in the prompt.
-3. Always include a `build.sh` script (e.g. copying web files to ./dist or compiling binaries).
+CRITICAL INSTRUCTIONS:
+1. If existing files are provided, BUILD DIRECTLY ON TOP OF THEM. Do not break existing features; integrate the new requirements cleanly.
+2. If this is net-new code, provide the complete, functional application.
+3. Always include or update `build.sh` to package/build the outputs into `./dist`.
 4. Output MUST be strictly valid JSON mapping relative file paths to their full string contents:
 {
-  "index.html": "<!DOCTYPE html>...",
-  "styles.css": "...",
-  "app.js": "...",
-  "build.sh": "#!/usr/bin/env bash\\nmkdir -p dist && cp index.html styles.css app.js dist/\\n",
-  "README.md": "# Project documentation..."
+  "index.html": "<full updated code>",
+  "app.js": "<full updated code>",
+  "build.sh": "#!/usr/bin/env bash\\n..."
 }
 """
 
 dev_prompt = f"""
-Build this project based on the client requirements and manager architecture:
+Implement this task:
 Title: {issue_title}
 Requirements: {issue_body}
-Stack: {plan.get('stack_chosen')}
-Plan: {plan.get('summary')}
+Architecture Plan: {plan.get('summary')}
+
+{existing_code_summary}
 """
 
-print("⏳ Calling Gemini Developer Agent (generating complete source files)...")
+print("⏳ Calling Gemini Developer Agent (generating updated source files)...")
 dev_res = client.models.generate_content(
     model=model_name,
     contents=dev_prompt,
@@ -139,7 +172,7 @@ for file_path, content in code_files.items():
     
     if clean_path.endswith(".sh"):
         os.chmod(clean_path, 0o755)
-    print(f"  ✓ Created: {clean_path}")
+    print(f"  ✓ Updated/Created: {clean_path}")
 
 # ---------------------------------------------------------------------------
 # PHASE 3: COMMIT & OPEN PULL REQUEST
@@ -154,7 +187,7 @@ commit_msg = f"feat: {issue_title} (closes #{issue_num})\n\nStack: {plan.get('st
 subprocess.run(["git", "commit", "-m", commit_msg], check=False)
 
 print(f"⬆️ Pushing branch {branch_name} to origin...")
-push_res = subprocess.run(["git", "push", "-u", "origin", branch_name, "--force"], check=False)
+subprocess.run(["git", "push", "-u", "origin", branch_name, "--force"], check=False)
 
 pr_body = f"""
 ## 🤖 Automated Solution for #{issue_num}
@@ -166,11 +199,11 @@ pr_body = f"""
 ### 📝 Summary
 {plan.get('summary')}
 
-### 📦 Key Files Added:
+### 📦 Modified / Created Files:
 {', '.join([f'`{k}`' for k in list(code_files.keys())])}
 
 ---
-*Once merged into `main`, GitHub Actions will automatically trigger the universal build pipeline to publish live web previews (GitHub Pages) or downloadable release binaries/APKs.*
+*Once merged into `main`, GitHub Actions will automatically trigger the universal build pipeline to publish live web previews or downloadable release binaries/APKs.*
 
 Closes #{issue_num}
 """
@@ -186,7 +219,11 @@ pr_create_res = subprocess.run([
 ], capture_output=True, text=True, check=False)
 
 pr_url = pr_create_res.stdout.strip()
-print(f"PR output: {pr_url}")
+if not pr_url:
+    print(f"⚠️ PR creation note: {pr_create_res.stderr.strip()}")
+    pr_url = f"https://github.com/{repo}/pull/new/{branch_name}"
+else:
+    print(f"✅ PR opened: {pr_url}")
 
 # Post completion notification directly on the issue
 completion_comment = f"✅ **Developer Agent has completed the implementation!**\n\nPull Request is ready for your review: {pr_url}\n\nMerge it into `main` to trigger the live preview."
