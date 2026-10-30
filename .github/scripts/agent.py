@@ -15,8 +15,9 @@ issue_num = os.environ.get("ISSUE_NUMBER", "1")
 issue_title = os.environ.get("ISSUE_TITLE", "New Feature Request")
 issue_body = os.environ.get("ISSUE_BODY", "")
 repo = os.environ.get("REPO", "")
+model_name = os.environ.get("GEMINI_MODEL", "gemini-3.8-flash")
 
-print(f"Processing Issue #{issue_num}: {issue_title}")
+print(f"Processing Issue #{issue_num}: {issue_title} using model {model_name}")
 
 # ---------------------------------------------------------------------------
 # PHASE 1: MANAGER AGENT
@@ -49,7 +50,7 @@ Output strictly valid JSON with this schema:
 manager_prompt = f"Issue Title: {issue_title}\nIssue Description:\n{issue_body}"
 
 manager_res = client.models.generate_content(
-    model="gemini-2.0-flash",
+    model=model_name,
     contents=manager_prompt,
     config=types.GenerateContentConfig(
         system_instruction=manager_system_instruction,
@@ -107,7 +108,7 @@ Plan: {plan.get('summary')}
 """
 
 dev_res = client.models.generate_content(
-    model="gemini-2.0-flash",
+    model=model_name,
     contents=dev_prompt,
     config=types.GenerateContentConfig(
         system_instruction=dev_system_instruction,
