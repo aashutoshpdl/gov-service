@@ -2,7 +2,13 @@ name: Autonomous Dev Engine (Issue to Code)
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [opened, reopened, labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue Number'
+        required: true
+        default: '2'
 
 jobs:
   solve-issue:
@@ -36,8 +42,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: gemini-3.8-flash
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_TITLE: ${{ github.event.issue.title }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+          ISSUE_TITLE: ${{ github.event.issue.title || 'Manual Trigger' }}
+          ISSUE_BODY: ${{ github.event.issue.body || '' }}
           REPO: ${{ github.repository }}
         run: python .github/scripts/agent.py
