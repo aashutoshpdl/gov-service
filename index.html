@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ne" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>स्थानीय वडा सिफारिस तथा नागरिक प्रमाणीकरण पोर्टल | Digital Ward Sifaris Portal</title>
+  
+  <!-- Google Fonts: Mukta (Devanagari & Latin) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Mukta:wght@300;400;500;600;700;800&family=Teko:wght@500;600&display=swap" rel="stylesheet" />
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            mukta: ['Mukta', 'sans-serif'],
+            teko: ['Teko', 'sans-serif']
+          },
+          colors: {
+            gov: {
+              blue: '#003893',
+              bluedark: '#002663',
+              crimson: '#DC143C',
+              crimsondark: '#A30022',
+              gold: '#D4AF37',
+              slate: '#475569',
+              bgLight: '#F8FAFC',
+              cardLight: '#FFFFFF',
+              borderLight: '#E2E8F0',
+              bgDark: '#0B132B',
+              cardDark: '#1C2541',
+              borderDark: '#3A506B'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <!-- React 18, ReactDOM, and Babel -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- QR Code Generator Lib (Vanilla JS) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="font-mukta antialiased bg-gov-bgLight text-slate-900 dark:bg-gov-bgDark dark:text-slate-100 min-h-screen transition-colors duration-200">
+  <div id="root"></div>
+  
+  <script type="text/babel" src="app.js"></script>
+</body>
+</html>
