@@ -26,11 +26,8 @@ if gh_token and repo:
         check=False
     )
 
-# Configure Gemini client with an explicit 3-minute timeout so it never hangs silently
-client = genai.Client(
-    api_key=api_key,
-    http_options=types.HttpOptions(timeout=180.0)
-)
+# Configure Gemini client
+client = genai.Client(api_key=api_key)
 
 print(f"🚀 Processing Issue #{issue_num}: {issue_title} using model {model_name}")
 
