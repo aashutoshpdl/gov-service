@@ -1,0 +1,110 @@
+/* Nepal Government Design System Semantic Styles & Print Layout */
+:root {
+  --gov-blue: #003893;
+  --gov-crimson: #DC143C;
+  --gov-gold: #D4AF37;
+}
+
+body {
+  font-family: 'Mukta', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle Nepal flag ribbon border */
+.gov-flag-stripe {
+  background: linear-gradient(90deg, #DC143C 0%, #DC143C 50%, #003893 50%, #003893 100%);
+}
+
+.gov-header-border {
+  border-bottom: 4px solid #003893;
+  position: relative;
+}
+.gov-header-border::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 25%;
+  height: 4px;
+  background-color: #DC143C;
+}
+
+/* Smooth modal & transitions */
+.fade-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.fade-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 250ms ease-out, transform 250ms ease-out;
+}
+
+/* Watermark for Ward Certificate Preview */
+.sifaris-letter-bg {
+  position: relative;
+  background-color: #ffffff;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+.sifaris-watermark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.05;
+  pointer-events: none;
+  width: 320px;
+  height: 320px;
+}
+
+/* Official Government Seal Stamp simulation */
+.gov-stamp {
+  border: 3px double #A30022;
+  color: #A30022;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transform: rotate(-7deg);
+  opacity: 0.88;
+  user-select: none;
+}
+
+/* Print Styles for official document */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  .no-print,
+  header,
+  footer,
+  nav,
+  .modal-backdrop {
+    display: none !important;
+  }
+  
+  .print-area {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 20mm !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: white !important;
+  }
+  
+  @page {
+    size: A4 portrait;
+    margin: 15mm;
+  }
+}
